@@ -37,7 +37,7 @@ async function main() {
     );
 
     // 查询round
-    console.log(`init round ${await swapdemo.currenRound()}`)
+    console.log(`init round ${await swapdemo.currentRound()}`)
 
     const swap_demo = swapdemo.address
 

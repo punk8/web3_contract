@@ -22,7 +22,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     IERC20 private _token1;
 
     // 新增轮次
-    uint256 public currenRound;
+    uint256 public currentRound;
 
     // 记录每一轮存储的token0
     mapping(uint256 => mapping(address => uint256)) token0_deposit;
@@ -39,6 +39,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         uint256 round;
         bool start;
         bool end;
+        bool success;
     }
 
     mapping(uint256 => RoundData) round_datas;
@@ -76,10 +77,18 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         uint256 token1amount
     );
 
+    event Failed(uint256 round);
+    event Success(uint256 round);
+
     function _new_round() private onlyOwner {
-        currenRound = currenRound + 1;
-        RoundData memory round_data = RoundData(currenRound, true, false);
-        round_datas[currenRound] = round_data;
+        currentRound = currentRound + 1;
+        RoundData memory round_data = RoundData(
+            currentRound,
+            true,
+            false,
+            false
+        );
+        round_datas[currentRound] = round_data;
     }
 
     function deposit(
@@ -121,12 +130,22 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
 
         claim_record[round][msg.sender] = true;
 
-        uint256 swap_token1 = (
-            token0_deposit[round][msg.sender].mul(token1_pool[round])
-        ).div(token0_pool[round]);
-        uint256 swap_token0 = (
-            token1_deposit[round][msg.sender].mul(token0_pool[round])
-        ).div(token1_pool[round]);
+        uint256 swap_token0 = 0;
+        uint256 swap_token1 = 0;
+
+        // 如果该轮swap成功
+        if (roundData.success == true) {
+            swap_token1 = (
+                token0_deposit[round][msg.sender].mul(token1_pool[round])
+            ).div(token0_pool[round]);
+            swap_token0 = (
+                token1_deposit[round][msg.sender].mul(token0_pool[round])
+            ).div(token1_pool[round]);
+        } else {
+            // 如果该轮swap没有成功，则原路返回
+            swap_token0 = token0_deposit[round][msg.sender];
+            swap_token1 = token1_deposit[round][msg.sender];
+        }
 
         if (swap_token1 > 0) {
             _token1.transfer(msg.sender, swap_token1);
@@ -140,11 +159,18 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     }
 
     function endRound() external onlyOwner {
-        RoundData storage roundData = round_datas[currenRound];
+        RoundData storage roundData = round_datas[currentRound];
         require(roundData.start == true, "endRound failed, round not start");
         require(roundData.end == false, "endRound failed, round have ended");
-
         roundData.end = true;
+
+        if (token0_pool[currentRound] > 0 && token1_pool[currentRound] > 0) {
+            roundData.success = true;
+            emit Success(currentRound);
+        } else {
+            emit Failed(currentRound);
+        }
+
         _new_round();
     }
 

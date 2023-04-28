@@ -58,7 +58,7 @@ describe("SwapDemo", function () {
         it("Should init round with 1", async function () {
             const { swapdemo } = await loadFixture(deployFixture);
 
-            expect(await swapdemo.currenRound()).to.equal(1);
+            expect(await swapdemo.currentRound()).to.equal(1);
         });
     });
 
@@ -98,7 +98,7 @@ describe("SwapDemo", function () {
                 );
                 await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
                 await swapdemo.endRound()
-                expect(await swapdemo.currenRound()).to.equal(2);
+                expect(await swapdemo.currentRound()).to.equal(2);
 
                 // round 2
 
@@ -114,7 +114,7 @@ describe("SwapDemo", function () {
                 );
                 await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
                 await swapdemo.endRound()
-                expect(await swapdemo.currenRound()).to.equal(2);
+                expect(await swapdemo.currentRound()).to.equal(2);
 
                 await swapdemo.claim(1)
 
@@ -124,8 +124,8 @@ describe("SwapDemo", function () {
                     );
             });
         });
-        describe("Deposit", function () {
-            it("Should transfer the token to contract", async function () {
+        describe("Deposit and claim", function () {
+            it("Should success swap", async function () {
                 const { swapdemo, owner, otherAccount } = await loadFixture(
                     deployFixture
                 );
@@ -136,7 +136,7 @@ describe("SwapDemo", function () {
                 );
 
                 await swapdemo.endRound()
-                expect(await swapdemo.currenRound()).to.equal(2);
+                expect(await swapdemo.currentRound()).to.equal(2);
 
                 await swapdemo.claim(1)
 
@@ -163,6 +163,30 @@ describe("SwapDemo", function () {
 
                 expect(await swapdemo.getTokenBalance()).to.deep.equals(
                     [BigNumber.from("1"), BigNumber.from("1")]
+                );
+
+            });
+            it("Should refund", async function () {
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("0"))
+
+                expect(await swapdemo.getTokenBalance()).to.deep.equals(
+                    [ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("0", "ether")]
+                );
+
+                await expect(swapdemo.endRound())
+                    .to.emit(swapdemo, "Failed")
+                    .withArgs(1); // We accept any value as `when` arg
+
+
+                expect(await swapdemo.currentRound()).to.equal(2);
+
+                await swapdemo.claim(1)
+
+                expect(await swapdemo.getTokenBalance()).to.deep.equals(
+                    [BigNumber.from("0"), BigNumber.from("0")]
                 );
 
             });
@@ -195,6 +219,28 @@ describe("SwapDemo", function () {
                     .to.emit(swapdemo, "Deposit")
                     .withArgs(owner.address, 1, ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("200", "ether")); // We accept any value as `when` arg
 
+
+            });
+            it("Should emit an failed event on endRound", async function () {
+
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("0"))
+                await expect(swapdemo.endRound())
+                    .to.emit(swapdemo, "Failed")
+                    .withArgs(1); // We accept any value as `when` arg
+
+            });
+            it("Should emit an success event on endRound", async function () {
+
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("10"))
+                await expect(swapdemo.endRound())
+                    .to.emit(swapdemo, "Success")
+                    .withArgs(1); // We accept any value as `when` arg
 
             });
 
