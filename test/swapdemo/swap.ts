@@ -138,6 +138,9 @@ describe("SwapDemo", function () {
                 await swapdemo.endRound()
                 expect(await swapdemo.currentRound()).to.equal(2);
 
+                console.log(`fee ${await swapdemo.token0_fee()}`)
+                console.log(`fee ${await swapdemo.token1_fee()}`)
+
                 await swapdemo.claim(1)
 
                 expect(await swapdemo.getTokenBalance()).to.deep.equals(

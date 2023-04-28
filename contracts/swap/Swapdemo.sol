@@ -32,8 +32,14 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     mapping(uint256 => mapping(address => bool)) claim_record;
 
     // 记录每一轮总的池子
-    mapping(uint256 => uint256) token0_pool;
-    mapping(uint256 => uint256) token1_pool;
+    mapping(uint256 => uint256) public token0_pool;
+    mapping(uint256 => uint256) public token1_pool;
+
+    // token对手续费
+    uint256 public token0_fee;
+    uint256 public token1_fee;
+
+    uint256 public treasuryFee; // 1000 means 10%
 
     struct RoundData {
         uint256 round;
@@ -47,6 +53,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     constructor(address token0, address token1) {
         _token0 = IERC20(token0);
         _token1 = IERC20(token1);
+        treasuryFee = 1000;
         _new_round();
     }
 
@@ -95,7 +102,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         uint256 round,
         uint256 amount0,
         uint256 amount1
-    ) external checkAllowance(amount0, amount1) {
+    ) external checkAllowance(amount0, amount1) nonReentrant {
         require(
             amount0 > 0 || amount1 > 0,
             "deposit: INSUFFICIENT_INPUT_AMOUNT"
@@ -158,7 +165,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         emit Claim(msg.sender, round, swap_token0, swap_token1);
     }
 
-    function endRound() external onlyOwner {
+    function endRound() external onlyOwner nonReentrant {
         RoundData storage roundData = round_datas[currentRound];
         require(roundData.start == true, "endRound failed, round not start");
         require(roundData.end == false, "endRound failed, round have ended");
@@ -166,6 +173,15 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
 
         if (token0_pool[currentRound] > 0 && token1_pool[currentRound] > 0) {
             roundData.success = true;
+
+            // fee
+            // uint256 treasuryAmt0 = (token0_pool[currentRound].mul(treasuryFee))
+            //     .div(10000);
+            // uint256 treasuryAmt1 = (token1_pool[currentRound].mul(treasuryFee))
+            //     .div(10000);
+            // token0_fee = token0_fee + treasuryAmt0;
+            // token1_fee = token1_fee + treasuryAmt1;
+
             emit Success(currentRound);
         } else {
             emit Failed(currentRound);
@@ -191,4 +207,21 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
             _token1.balanceOf(address(this))
         ];
     }
+
+    function withdrawlTokenBalance() external onlyOwner nonReentrant {
+        _token0.transfer(msg.sender, token0_fee);
+        _token1.transfer(msg.sender, token1_fee);
+
+        token0_fee = 0;
+        token1_fee = 0;
+    }
+
+    // // debug
+    // function getToken0Pool(uint256 round) external view returns (uint256) {
+    //     return token0_pool[round];
+    // }
+
+    // function getToken1Pool(uint256 round) external view returns (uint256) {
+    //     return token1_pool[round];
+    // }
 }
