@@ -106,14 +106,22 @@ describe("SwapDemo", function () {
                     .to.be.revertedWith(
                         "deposit failed, round have ended"
                     );
+            });
 
-
+            it("Should revert with the claim if caller have claimed", async function () {
+                const { swapdemo, owner } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
+                await swapdemo.endRound()
+                expect(await swapdemo.currenRound()).to.equal(2);
 
                 await swapdemo.claim(1)
-                // await expect(swapdemo.claim(1))
-                //     .to.be.revertedWith(
-                //         "deposit failed, round have ended"
-                //     );
+
+                await expect(swapdemo.claim(1))
+                    .to.be.revertedWith(
+                        "claim failed, have claimed"
+                    );
             });
         });
         describe("Transfers", function () {
@@ -122,6 +130,7 @@ describe("SwapDemo", function () {
                     deployFixture
                 );
                 await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
+
                 expect(await swapdemo.getTokenBalance()).to.deep.equals(
                     [ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("200", "ether")]
                 );
@@ -135,7 +144,6 @@ describe("SwapDemo", function () {
                     [BigNumber.from("0"), BigNumber.from("0")]
                 );
 
-
                 // round 2
                 await swapdemo.deposit(2, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
                 await swapdemo.connect(otherAccount).deposit(2, ethers.utils.parseEther("200"), ethers.utils.parseEther("500"))
@@ -147,14 +155,15 @@ describe("SwapDemo", function () {
 
                 await swapdemo.claim(2)
 
-                console.log(await swapdemo.getTokenBalance())
+                expect(await swapdemo.getTokenBalance()).to.deep.equals(
+                    [BigNumber.from("214285714285714285715"), BigNumber.from("466666666666666666667")]
+                );
 
                 await swapdemo.connect(otherAccount).claim(2)
 
-                console.log(await swapdemo.getTokenBalance())
-
-
-
+                expect(await swapdemo.getTokenBalance()).to.deep.equals(
+                    [BigNumber.from("1"), BigNumber.from("1")]
+                );
 
             });
         });

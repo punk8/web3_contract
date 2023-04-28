@@ -10,11 +10,14 @@ import "@openzeppelin/contracts/access/Ownable.sol";
 import "@openzeppelin/contracts/security/Pausable.sol";
 import "@openzeppelin/contracts/security/ReentrancyGuard.sol";
 import "@openzeppelin/contracts/token/ERC20/utils/SafeERC20.sol";
+import "@openzeppelin/contracts/utils/math/SafeMath.sol";
 
 /**
  * @title Swapdemo
  */
 contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
+    using SafeMath for uint256;
+
     IERC20 private _token0;
     IERC20 private _token1;
 
@@ -24,6 +27,9 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     // 记录每一轮存储的token0
     mapping(uint256 => mapping(address => uint256)) token0_deposit;
     mapping(uint256 => mapping(address => uint256)) token1_deposit;
+
+    // 每一轮的claim记录
+    mapping(uint256 => mapping(address => bool)) claim_record;
 
     // 记录每一轮总的池子
     mapping(uint256 => uint256) token0_pool;
@@ -98,14 +104,21 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         }
     }
 
-    function claim(uint256 round) external {
+    function claim(uint256 round) external nonReentrant {
         RoundData memory roundData = round_datas[round];
         require(roundData.end == true, "claim failed, round not end");
 
-        uint256 swap_token1 = (token0_deposit[round][msg.sender] *
-            token1_pool[round]) / token0_pool[round];
-        uint256 swap_token0 = (token1_deposit[round][msg.sender] *
-            token0_pool[round]) / token1_pool[round];
+        bool claimed = claim_record[round][msg.sender];
+        require(claimed == false, "claim failed, have claimed");
+
+        claim_record[round][msg.sender] = true;
+
+        uint256 swap_token1 = (
+            token0_deposit[round][msg.sender].mul(token1_pool[round])
+        ).div(token0_pool[round]);
+        uint256 swap_token0 = (
+            token1_deposit[round][msg.sender].mul(token0_pool[round])
+        ).div(token1_pool[round]);
 
         if (swap_token1 > 0) {
             _token1.transfer(msg.sender, swap_token1);
