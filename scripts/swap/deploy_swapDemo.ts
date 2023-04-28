@@ -2,8 +2,8 @@ import { ethers } from "hardhat";
 
 async function main() {
 
-    const token0 = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
-    const token1 = "0x0165878A594ca255338adfa4d48449f69242Eb8F"
+    const token0 = "0xCf7Ed3AccA5a467e9e704C703E8D87F634fB0Fc9"
+    const token1 = "0x9fE46736679d2D9a65F0992F2272dE9f3c7fa6e0"
     const Swapdemo = await ethers.getContractFactory("Swapdemo");
     const swapdemo = await Swapdemo.deploy(token0, token1);
 

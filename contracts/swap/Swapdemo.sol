@@ -18,15 +18,29 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
     IERC20 private _token0;
     IERC20 private _token1;
 
-    mapping(address => uint256) token0Reverse;
-    mapping(address => uint256) token1Reverse;
+    // 新增轮次
+    uint256 public currenRound;
 
-    uint256 token0Pool;
-    uint256 token1Pool;
+    // 记录每一轮存储的token0
+    mapping(uint256 => mapping(address => uint256)) token0_deposit;
+    mapping(uint256 => mapping(address => uint256)) token1_deposit;
+
+    // 记录每一轮总的池子
+    mapping(uint256 => uint256) token0_pool;
+    mapping(uint256 => uint256) token1_pool;
+
+    struct RoundData {
+        uint256 round;
+        bool start;
+        bool end;
+    }
+
+    mapping(uint256 => RoundData) round_datas;
 
     constructor(address token0, address token1) {
         _token0 = IERC20(token0);
         _token1 = IERC20(token1);
+        _new_round();
     }
 
     // Modifier to check token allowance
@@ -49,7 +63,14 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         uint256 amount
     );
 
+    function _new_round() private onlyOwner {
+        currenRound = currenRound + 1;
+        RoundData memory round_data = RoundData(currenRound, true, false);
+        round_datas[currenRound] = round_data;
+    }
+
     function deposit(
+        uint256 round,
         uint256 amount0,
         uint256 amount1
     ) external checkAllowance(amount0, amount1) {
@@ -57,24 +78,34 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
             amount0 > 0 || amount1 > 0,
             "deposit: INSUFFICIENT_INPUT_AMOUNT"
         );
+        RoundData memory roundData = round_datas[round];
+        require(roundData.start == true, "deposit failed, round not start");
+        require(roundData.end == false, "deposit failed, round have ended");
+
         if (amount0 > 0) {
             _token0.transferFrom(msg.sender, address(this), amount0);
-            token0Reverse[msg.sender] = token0Reverse[msg.sender] + amount0;
-            token0Pool = token0Pool + amount0;
+            token0_deposit[round][msg.sender] =
+                token0_deposit[round][msg.sender] +
+                amount0;
+            token0_pool[round] = token0_pool[round] + amount0;
         }
         if (amount1 > 0) {
             _token1.transferFrom(msg.sender, address(this), amount1);
-            token1Reverse[msg.sender] = token1Reverse[msg.sender] + amount1;
-            token1Pool = token1Pool + amount1;
+            token1_deposit[round][msg.sender] =
+                token1_deposit[round][msg.sender] +
+                amount1;
+            token1_pool[round] = token1_pool[round] + amount1;
         }
-        // emit DEPOSIT(msg.sender, to, address(_token), amount);
     }
 
-    function claim() external {
-        uint256 swap_token1 = (token0Reverse[msg.sender] * token1Pool) /
-            token0Pool;
-        uint256 swap_token0 = (token1Reverse[msg.sender] * token0Pool) /
-            token1Pool;
+    function claim(uint256 round) external {
+        RoundData memory roundData = round_datas[round];
+        require(roundData.end == true, "claim failed, round not end");
+
+        uint256 swap_token1 = (token0_deposit[round][msg.sender] *
+            token1_pool[round]) / token0_pool[round];
+        uint256 swap_token0 = (token1_deposit[round][msg.sender] *
+            token0_pool[round]) / token1_pool[round];
 
         if (swap_token1 > 0) {
             _token1.transfer(msg.sender, swap_token1);
@@ -85,26 +116,30 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         }
     }
 
-    function querySwapBalance() external view returns (uint256[2] memory) {
-        uint256 swap_token1 = (token0Reverse[msg.sender] * token1Pool) /
-            token0Pool;
-        uint256 swap_token0 = (token1Reverse[msg.sender] * token0Pool) /
-            token1Pool;
+    function endRound() external onlyOwner {
+        RoundData storage roundData = round_datas[currenRound];
+        require(roundData.start == true, "endRound failed, round not start");
+        require(roundData.end == false, "endRound failed, round have ended");
 
+        roundData.end = true;
+        _new_round();
+    }
+
+    function querySwapBalance(
+        uint256 round
+    ) external view returns (uint256[2] memory) {
+        uint256 swap_token1 = (token0_deposit[round][msg.sender] *
+            token1_pool[round]) / token0_pool[round];
+        uint256 swap_token0 = (token1_deposit[round][msg.sender] *
+            token0_pool[round]) / token1_pool[round];
         return [swap_token1, swap_token0];
     }
 
-    function endGame() external onlyOwner {
-        // 判断时间是否满足
-    }
-
     // Allow you to show how many tokens owns this smart contract
-    function getToken0Balance() external view returns (uint) {
-        return _token0.balanceOf(address(this));
-    }
-
-    // Allow you to show how many tokens owns this smart contract
-    function getToken1Balance() external view returns (uint) {
-        return _token1.balanceOf(address(this));
+    function getTokenBalance() external view returns (uint256[2] memory) {
+        return [
+            _token0.balanceOf(address(this)),
+            _token1.balanceOf(address(this))
+        ];
     }
 }

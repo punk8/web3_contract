@@ -8,7 +8,7 @@ async function main() {
 
     const token0 = "0x5FbDB2315678afecb367f032d93F642f64180aa3"
     const token1 = "0x0165878A594ca255338adfa4d48449f69242Eb8F"
-    const swap_demo = "0x4A679253410272dd5232B3Ff7cF5dbB88f295319"
+    const swap_demo = "0xDc64a140Aa3E981100a9becA4E685f962f0cF6C9"
 
     const erc20 = await ethers.getContractFactory("ERC20");
     const erc20_token0 = erc20.attach(token0);
