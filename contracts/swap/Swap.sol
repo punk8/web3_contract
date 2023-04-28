@@ -23,6 +23,9 @@ contract PancakePredictionV2 is Ownable, Pausable, ReentrancyGuard {
     address public adminAddress; // address of the admin
     address public operatorAddress; // address of the operator
 
+    address public token0;
+    address public token1;
+
     uint256 public bufferSeconds; // number of seconds for valid execution of a prediction round
     uint256 public intervalSeconds; // interval in seconds between two prediction rounds
 
@@ -43,44 +46,33 @@ contract PancakePredictionV2 is Ownable, Pausable, ReentrancyGuard {
     mapping(uint256 => uint256) public total_token0;
     mapping(uint256 => uint256) public total_token1;
 
-    mapping(uint256 => mapping(address => BetInfo)) public ledger;
+    mapping(uint256 => mapping(address => DepositInfo)) public ledger;
     mapping(uint256 => Round) public rounds;
     mapping(address => uint256[]) public userRounds;
 
     enum Position {
-        Bull,
-        Bear
+        Token0,
+        Token1
     }
 
     struct Round {
         uint256 epoch;
         uint256 startTimestamp;
-        uint256 lockTimestamp;
         uint256 closeTimestamp;
-        int256 lockPrice;
-        int256 closePrice;
-        uint256 lockOracleId;
-        uint256 closeOracleId;
         uint256 totalAmount;
-        uint256 bullAmount;
-        uint256 bearAmount;
+        uint256 token0Amount;
+        uint256 token1Amount;
         uint256 rewardBaseCalAmount;
         uint256 rewardAmount;
-        bool oracleCalled;
     }
 
-    struct BetInfo {
+    struct DepositInfo {
         Position position;
         uint256 amount;
         bool claimed; // default false
     }
 
-    event BetBear(
-        address indexed sender,
-        uint256 indexed epoch,
-        uint256 amount
-    );
-    event BetBull(
+    event Deposit(
         address indexed sender,
         uint256 indexed epoch,
         uint256 amount
@@ -191,10 +183,42 @@ contract PancakePredictionV2 is Ownable, Pausable, ReentrancyGuard {
         uint256 token1_amount
     ) external payable whenNotPaused nonReentrant notContract {
         require(epoch == currentEpoch, "Round not start");
+        require(_depositable(epoch), "Round not depositable");
+
+        require(
+            ledger[epoch][msg.sender].amount == 0,
+            "Can only deposit once per round"
+        );
 
         // require token0_amount or token1_amount greater than 0, then transfer
+        require(token0_amount > 0 || token1_amount > 0, "Amount can not be 0");
 
-        //
+        // transfer
+        { // scope for _token{0,1}, avoids stack too deep errors
+        address _token0 = token0;
+        address _token1 = token1;
+
+        if (token0_amount > 0) IERC20(_token0).transfer(address(this),token0_amount); // optimistically transfer tokens
+        if (token1_amount > 0) IERC20(_token1).transfer(address(this),token1_amount); // optimistically transfer tokens
+        }
+
+        // Update round data
+        Round storage round = rounds[epoch];
+        round.token0Amount = round.token0Amount + token0_amount;
+        round.token1Amount = round.token1Amount + token1_amount;
+
+        // Update user data
+        DepositInfo storage depostiInfo = ledger[epoch][msg.sender];
+
+        if (token0_amount > 0) {
+            depostiInfo.position = Position.Token0;
+        } else {
+            depostiInfo.position = Position.Token1;
+        }
+        depostiInfo.amount = amount;
+        userRounds[msg.sender].push(epoch);
+
+        emit Deposit(msg.sender, epoch, amount);
     }
 
     function executeRound()
@@ -754,4 +778,22 @@ contract PancakePredictionV2 is Ownable, Pausable, ReentrancyGuard {
     //         block.timestamp > rounds[epoch].startTimestamp &&
     //         block.timestamp < rounds[epoch].lockTimestamp;
     // }
+
+    /**
+     * @notice Determine if a round is valid for receiving deposit
+     * Round must have started
+     * Current timestamp must be within startTimestamp and closeTimestamp
+     */
+    function _depositable(uint256 epoch) internal view returns (bool) {
+        return
+            rounds[epoch].startTimestamp != 0 &&
+            rounds[epoch].closeTimestamp != 0 &&
+            block.timestamp > rounds[epoch].startTimestamp &&
+            block.timestamp < rounds[epoch].closeTimestamp;
+    }
+
+    function _safeTransfer(address token, address to, uint value) private {
+        (bool success, bytes memory data) = token.call(abi.encodeWithSelector(SELECTOR, to, value));
+        require(success && (data.length == 0 || abi.decode(data, (bool))), 'UniswapV2: TRANSFER_FAILED');
+    }
 }
