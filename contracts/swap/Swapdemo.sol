@@ -62,11 +62,18 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         _;
     }
 
-    event DEPOSIT(
+    event Deposit(
         address indexed sender,
-        address indexed to,
-        address indexed token,
-        uint256 amount
+        uint256 indexed round,
+        uint256 token0amount,
+        uint256 token1amount
+    );
+
+    event Claim(
+        address indexed claimer,
+        uint256 indexed round,
+        uint256 token0amount,
+        uint256 token1amount
     );
 
     function _new_round() private onlyOwner {
@@ -102,6 +109,7 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
                 amount1;
             token1_pool[round] = token1_pool[round] + amount1;
         }
+        emit Deposit(msg.sender, round, amount0, amount1);
     }
 
     function claim(uint256 round) external nonReentrant {
@@ -127,6 +135,8 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         if (swap_token0 > 0) {
             _token0.transfer(msg.sender, swap_token0);
         }
+
+        emit Claim(msg.sender, round, swap_token0, swap_token1);
     }
 
     function endRound() external onlyOwner {
@@ -138,14 +148,14 @@ contract Swapdemo is Ownable, Pausable, ReentrancyGuard {
         _new_round();
     }
 
-    function querySwapBalance(
+    function queryClaimableBalance(
         uint256 round
     ) external view returns (uint256[2] memory) {
         uint256 swap_token1 = (token0_deposit[round][msg.sender] *
             token1_pool[round]) / token0_pool[round];
         uint256 swap_token0 = (token1_deposit[round][msg.sender] *
             token0_pool[round]) / token1_pool[round];
-        return [swap_token1, swap_token0];
+        return [swap_token0, swap_token1];
     }
 
     // Allow you to show how many tokens owns this smart contract

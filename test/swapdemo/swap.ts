@@ -124,7 +124,7 @@ describe("SwapDemo", function () {
                     );
             });
         });
-        describe("Transfers", function () {
+        describe("Deposit", function () {
             it("Should transfer the token to contract", async function () {
                 const { swapdemo, owner, otherAccount } = await loadFixture(
                     deployFixture
@@ -168,19 +168,49 @@ describe("SwapDemo", function () {
             });
         });
 
-        // describe("Events", function () {
-        //     it("Should emit an event on withdrawals", async function () {
-        //         const { lock, unlockTime, lockedAmount } = await loadFixture(
-        //             deployOneYearLockFixture
-        //         );
+        describe("QueryClaimableBalance", function () {
+            it("Should return the real amount of token", async function () {
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
 
-        //         await time.increaseTo(unlockTime);
+                expect(await swapdemo.queryClaimableBalance(1)).to.deep.equals(
+                    [ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("200", "ether")]
+                );
 
-        //         await expect(lock.withdraw())
-        //             .to.emit(lock, "Withdrawal")
-        //             .withArgs(lockedAmount, anyValue); // We accept any value as `when` arg
-        //     });
-        // });
+            });
+        });
+
+
+        describe("Events", function () {
+            it("Should emit an event on deposit", async function () {
+
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
+
+                await expect(swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200")))
+                    .to.emit(swapdemo, "Deposit")
+                    .withArgs(owner.address, 1, ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("200", "ether")); // We accept any value as `when` arg
+
+
+            });
+
+            it("Should emit an event on claim", async function () {
+
+                const { swapdemo, owner, otherAccount } = await loadFixture(
+                    deployFixture
+                );
+                await swapdemo.deposit(1, ethers.utils.parseEther("100"), ethers.utils.parseEther("200"))
+                await swapdemo.endRound()
+                await expect(swapdemo.claim(1))
+                    .to.emit(swapdemo, "Claim")
+                    .withArgs(owner.address, 1, ethers.utils.parseUnits("100", "ether"), ethers.utils.parseUnits("200", "ether")); // We accept any value as `when` arg
+
+            });
+        });
 
 
     });
